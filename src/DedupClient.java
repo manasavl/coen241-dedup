@@ -147,12 +147,12 @@ public class DedupClient {
 	
 	public static void main(String[] args) {
 		args = new String[4];
-		args[0] = "get";
+		args[0] = "delete";
 		// args[1] =
 		// "/Users/Johnny/Documents/workspace/coen241-dedup/data/file1";
 		args[1] = "file1";
 		args[2] = "0.0.0.0";
-		args[3] = "61508";
+		args[3] = "62535";
 		if (args.length != 4) {
 			System.err.println("Usage: java DedupClient [put | get] [file] [address] [port]");
 			System.exit(1);

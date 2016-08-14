@@ -33,13 +33,13 @@ public class EC2Server {
 		}
 		System.out.println("Server is up: " + address + " : " + port);
 		segmentToCount = loadMap(); // Load up the mappings when this runs
-//		printSegments();
+		printSegments();
 		threadPool = Executors.newCachedThreadPool();
 	}
 	
 	private static void printSegments() {
 		for (String key : segmentToCount.keySet()) {
-			System.out.println(key);
+			System.out.println(key + ": " + segmentToCount.get(key));
 		}
 	}
 	

@@ -102,12 +102,13 @@ public class EC2ServerThread extends Thread {
 					out.println("file does not exist!");
 				}
 				else {
+					out.println("Deleting file");
 					try (
 						BufferedReader br = new BufferedReader(new FileReader(file))
 						) {
 						String line = br.readLine(); // skip the first line, numSegments
 						while ((line = br.readLine()) != null) {
-							
+							server.removeSegment(line);
 						}
 					}
 					catch (IOException e) {
