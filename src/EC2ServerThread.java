@@ -1,7 +1,9 @@
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -68,6 +70,50 @@ public class EC2ServerThread extends Thread {
 				String fileName = split[1];
 				System.out.println("FILE NAME: " + fileName);
 				receiveFile(saveDest + fileName, socket.getInputStream());
+			}
+			// If client wants to get a file
+			if (input.startsWith("get")) {
+				String[] split = input.split(" ");
+				String fileName = split[1];
+				File file = new File(saveDest + fileName + ".data");
+				if (!file.exists()) {
+					out.println("File does not exist!");
+				}
+				else {
+					try (
+						BufferedReader br = new BufferedReader(new FileReader(file))
+						) {
+						String line;
+						while ((line = br.readLine()) != null) {
+							out.println(line);
+						}
+					}
+					catch (IOException e) {
+						System.out.println(e);
+					}
+				}
+			}
+			// If clients wants to delete a file
+			if (input.startsWith("delete")) {
+				String[] split = input.split(" ");
+				String fileName = split[1];
+				File file = new File(saveDest + fileName + ".data");
+				if (!file.exists()) {
+					out.println("file does not exist!");
+				}
+				else {
+					try (
+						BufferedReader br = new BufferedReader(new FileReader(file))
+						) {
+						String line = br.readLine(); // skip the first line, numSegments
+						while ((line = br.readLine()) != null) {
+							
+						}
+					}
+					catch (IOException e) {
+						System.out.println(e);
+					}
+				}
 			}
 		}
 		catch (IOException e) {

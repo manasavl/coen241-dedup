@@ -92,7 +92,7 @@ public class EC2Manager {
 	private static void launchEC2() {
 		RunInstancesRequest runInstancesRequest = new RunInstancesRequest();
 		runInstancesRequest.withImageId("ami-16fd7026")
-						   .withInstanceType("m1.small")
+						   .withInstanceType("m1.micro")
 						   .withMinCount(1)
 						   .withMaxCount(1)
 						   .withKeyName("Johnny")

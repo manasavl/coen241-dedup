@@ -104,7 +104,10 @@ public class EC2Server {
 	
 	private synchronized void deleteSegment(String segment) {
 		segmentToCount.remove(segment); // remove the segment
+		MyS3Client client = new MyS3Client();
 		// Delete objects from S3
+		client.deleteSegment(segment);
+		
 	}
 	
 	public synchronized boolean hasSegment(String segment) {
