@@ -57,7 +57,7 @@ public class MyS3Client {
 	}
 
 	// Downloads file from S3
-	public void downloadFile(String fileName, String[] segments) {
+	public void downloadFile(String fileName, String[][] segments) {
 		int bucketIndex = 0; // Try with first bucket
 		S3Object[] s3Objects = new S3Object[segments.length];
 		boolean done = false;
@@ -65,10 +65,10 @@ public class MyS3Client {
 			String s3Bucket = BUCKETS[bucketIndex];
 			try {
 				for (int i = 0; i < segments.length; i++) {
-					System.out.println("Downloading: " + segments[i]);
-					s3Objects[i] = client.getObject(new GetObjectRequest(s3Bucket, segments[i]));
+					System.out.println("Downloading: " + segments[i][0]);
+					s3Objects[i] = client.getObject(new GetObjectRequest(s3Bucket, segments[i][0]));
 				}
-				constructFile(fileName, s3Objects); // Recompiles the file
+				constructFile(fileName, s3Objects, segments); // Recompiles the file
 				done = true;
 			} catch (AmazonServiceException ase) {
 				System.out.println("Caught an AmazonServiceException, which " + "means your request made it "
@@ -103,14 +103,26 @@ public class MyS3Client {
 
 	// Takes the S3 segment objects, checks them for length, and creates the
 	// file
-	private static void constructFile(String fileName, S3Object[] segments) throws IOException {
+	private static void constructFile(String fileName, S3Object[] segmentObjects, String[][] segments) 
+			throws IOException {
 		PrintWriter pw = new PrintWriter(new File(fileName));
-		for (S3Object s3Object : segments) {
+		for (int i = 0; i < segmentObjects.length; i++) {
+			int byteCount = 0;
+			int len = Integer.parseInt(segments[i][1]); // byteCount must = len or there is an issue!
+			S3Object s3Object = segmentObjects[i];
 			InputStream is = s3Object.getObjectContent();
 			BufferedReader br = new BufferedReader(new InputStreamReader(is));
 			int currChar = -1;
 			while ((currChar = br.read()) != -1) {
 				pw.write(currChar);
+				byteCount++;
+			}
+			if (byteCount != len) {
+				System.err.println("Error in segment " + segments[i][0] +
+						": bytes written and segment length do not match!");
+				br.close();
+				is.close();
+				System.exit(1);
 			}
 			br.close();
 			is.close();

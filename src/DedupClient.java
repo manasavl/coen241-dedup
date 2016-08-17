@@ -5,27 +5,14 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.HashSet;
 import java.util.concurrent.TimeUnit;
-
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3Client;
-import com.amazonaws.services.s3.model.GetObjectRequest;
-import com.amazonaws.services.s3.model.PutObjectRequest;
-import com.amazonaws.services.s3.model.S3Object;
 
 public class DedupClient {
-
-	private static AmazonS3 s3;
-	private static String[] s3Buckets = new String[] { "dedupbucket1", "dedupbucket2", "dedupbucket3" };
 
 	/**
 	 * Segmentation and finger-printing of files should return a list of segment
@@ -42,7 +29,9 @@ public class DedupClient {
 		try (BufferedReader br = new BufferedReader(new FileReader(metadata))) {
 			int numSegments = Integer.parseInt(br.readLine());
 			for (int i = 0; i < numSegments; i++) {
-				String segmentName = br.readLine();
+				String line = br.readLine();
+				String[] split = line.split(",");
+				String segmentName = split[0];
 				segments.add(segmentName);
 			}
 		} catch (IOException e) {
@@ -94,7 +83,7 @@ public class DedupClient {
 		}
 	}
 
-	public static String[] getFileSegments(String fileName, String address, int port) {
+	public static String[][] getFileSegments(String fileName, String address, int port) {
 		try (Socket socket = new Socket(address, port);
 				PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
 				BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
@@ -108,9 +97,12 @@ public class DedupClient {
 				// Build our array of segments
 				int numSegments = Integer.parseInt(input); // Line 1 is number
 															// of segments
-				String[] segments = new String[numSegments];
+				String[][] segments = new String[numSegments][2];
 				for (int i = 0; i < numSegments; i++) {
-					segments[i] = in.readLine();
+					String line = in.readLine(); // [fingerprint/filename,len]
+					String[] split = line.split(",");
+					segments[i][0] = split[0]; // file name
+					segments[i][1] = split[1]; // length
 				}
 				return segments;
 			}
@@ -148,11 +140,11 @@ public class DedupClient {
 	public static void main(String[] args) {
 		args = new String[4];
 		args[0] = "delete";
-		// args[1] =
-		// "/Users/Johnny/Documents/workspace/coen241-dedup/data/file1";
+//		args[1] =
+//		 "/Users/Johnny/Documents/workspace/coen241-dedup/data/file1";
 		args[1] = "file1";
 		args[2] = "0.0.0.0";
-		args[3] = "62535";
+		args[3] = "58762";
 		if (args.length != 4) {
 			System.err.println("Usage: java DedupClient [put | get] [file] [address] [port]");
 			System.exit(1);
@@ -189,11 +181,11 @@ public class DedupClient {
 		}
 		if (command.equalsIgnoreCase("get")) {
 			// Step 1: Get the segments needed to reconstruct our file
-			String[] fileSegments = getFileSegments(myFile, address, port);
+			String[][] fileSegments = getFileSegments(myFile, address, port);
 			// Step 2: Initialize S3 client
 			MyS3Client client = new MyS3Client();
 			// Step 3: Download objects from S3
-			client.downloadFile("testingFilelah", fileSegments);
+			client.downloadFile("testingFile", fileSegments);
 		}
 		if (command.equalsIgnoreCase("delete")) {
 			deleteFile(myFile, address, port);

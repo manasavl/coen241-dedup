@@ -108,7 +108,9 @@ public class EC2ServerThread extends Thread {
 						) {
 						String line = br.readLine(); // skip the first line, numSegments
 						while ((line = br.readLine()) != null) {
-							server.removeSegment(line);
+							split = line.split(",");
+							String name = split[0];
+							server.removeSegment(name);
 						}
 					}
 					catch (IOException e) {
