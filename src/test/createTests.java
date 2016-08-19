@@ -7,10 +7,9 @@ public class createTests {
 
 		String url = /*args[0]*/"https://en.wikipedia.org/wiki/Rabin_fingerprint";
 		String rep = /*args[1]*/"C:/test/html";
-		/*crawler c = new crawler(url, rep, 40);
-		c.startCrawling();*/
-		CompareFiles c = new CompareFiles();
-		c.compareFiles("C:/test/html001.html", "C:/test/html003.html");
+		crawler c = new crawler(url, rep, 40);
+		c.startCrawling();
+		
 	}
 
 }
