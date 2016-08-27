@@ -3,16 +3,25 @@ import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
-import com.amazonaws.services.s3.AmazonS3;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
 
 public class DedupClient {
+
+	static final String SAVE_DIR = "./FROM_SERVER/";
 
 	/**
 	 * Segmentation and finger-printing of files should return a list of segment
@@ -27,12 +36,10 @@ public class DedupClient {
 	private static HashSet<String> prepareSegments(File metadata) {
 		HashSet<String> segments = new HashSet<>();
 		try (BufferedReader br = new BufferedReader(new FileReader(metadata))) {
-			int numSegments = Integer.parseInt(br.readLine());
-			for (int i = 0; i < numSegments; i++) {
-				String line = br.readLine();
-				String[] split = line.split(",");
-				String segmentName = split[0];
-				segments.add(segmentName);
+			String line;
+			while ((line = br.readLine()) != null) {
+				List<String> arr = Arrays.asList(line.split(","));
+				segments.add(arr.get(0));
 			}
 		} catch (IOException e) {
 			System.out.println(e);
@@ -51,6 +58,7 @@ public class DedupClient {
 				PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
 				BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 			out.println("duplicate check");
+			System.out.println("Connected!");
 			String input;
 			for (String segment : segments) {
 				out.println(segment);
@@ -60,19 +68,27 @@ public class DedupClient {
 			}
 		} catch (IOException e) {
 			System.out.println(e);
+			e.printStackTrace();
 		}
 		return toUpload;
 	}
 
-	// This sends the file to EC2 server
+	/**
+	 * This method sends the file to the server at the specified address and
+	 * port.
+	 * 
+	 * @param file
+	 * @param address
+	 * @param port
+	 */
 	public static void sendFile(File file, String address, int port) {
 		try (Socket socket = new Socket(address, port);
 				PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
 				FileInputStream fis = new FileInputStream(file);
 				BufferedInputStream bis = new BufferedInputStream(fis);
 				BufferedOutputStream toServer = new BufferedOutputStream(socket.getOutputStream());) {
-			out.println("upload " + file.getName() + " " + file.length()); // upload
-																			// filename
+			// upload filename length
+			out.println("upload " + file.getName() + " " + file.length());
 			byte[] fileByteArray = new byte[(int) file.length()];
 			bis.read(fileByteArray, 0, fileByteArray.length);
 			toServer.write(fileByteArray, 0, fileByteArray.length);
@@ -80,52 +96,139 @@ public class DedupClient {
 			toServer.flush();
 		} catch (IOException e) {
 			System.out.println(e);
+			e.printStackTrace();
 		}
 	}
 
-	public static String[][] getFileSegments(String fileName, String address, int port) {
+	/**
+	 * Returns an array of segments to reconstruct our file
+	 */
+	public static ArrayList<String> getFileSegments(String fileName, String address, int port) {
 		try (Socket socket = new Socket(address, port);
 				PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
 				BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 			out.println("get " + fileName); // Tell server which file we want
 			String input;
-			input = in.readLine(); // Get number of segments we need
+			input = in.readLine();
 			if (input.equals("File does not exist!")) {
 				System.err.println(fileName + " does not exist!");
 				System.exit(1);
 			} else {
 				// Build our array of segments
-				int numSegments = Integer.parseInt(input); // Line 1 is number
-															// of segments
-				String[][] segments = new String[numSegments][2];
-				for (int i = 0; i < numSegments; i++) {
-					String line = in.readLine(); // [fingerprint/filename,len]
-					String[] split = line.split(",");
-					segments[i][0] = split[0]; // file name
-					segments[i][1] = split[1]; // length
+				ArrayList<String> arr = new ArrayList<String>();
+				String line;
+				while ((line = in.readLine()) != null) {
+					List<String> list = Arrays.asList(line.split(","));
+					arr.add(list.get(0));
 				}
-				return segments;
+
+				return arr;
 			}
 		} catch (IOException e) {
 			System.out.println(e);
+			e.printStackTrace();
 		}
 		return null;
 	}
-	
+
+	/**
+	 * Deletes the specified file from the server and S3 buckets
+	 */
 	public static void deleteFile(String fileName, String address, int port) {
-		try (
-			Socket socket = new Socket(address, port);
-			PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-			BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))
-			) {
+		System.out.println("Deleting: " + fileName);
+		try (Socket socket = new Socket(address, port);
+				PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+				BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 			out.println("delete " + fileName);
 			String input = in.readLine();
 			if (input.equals("File does not exist!")) {
 				System.out.println(fileName + " does not exist!");
 			}
-		}
-		catch (IOException e) {
+		} catch (IOException e) {
 			System.out.println(e);
+			e.printStackTrace();
+		}
+	}
+
+	/**
+	 * Compresses the specified file into fileName.zip
+	 */
+	public static void compressFile(String fileName) {
+		System.out.println("Compressing " + fileName);
+		File unzippedFile = new File(fileName);
+		try (FileOutputStream fos = new FileOutputStream(fileName + ".zip");
+				ZipOutputStream zos = new ZipOutputStream(fos);
+				FileInputStream fis = new FileInputStream(new File(fileName))) {
+			byte[] buffer = new byte[1];
+			zos.putNextEntry(new ZipEntry(fileName));
+			int length;
+			while ((length = fis.read(buffer)) != -1) {
+				zos.write(buffer, 0, length);
+			}
+			zos.closeEntry();
+		} catch (IOException e) {
+			System.out.println(e);
+			e.printStackTrace();
+		}
+		File zippedFile = new File(fileName + ".zip");
+		long unzippedLength = unzippedFile.length();
+		long zippedLength = zippedFile.length();
+		DecimalFormat format = new DecimalFormat("#.00");
+		System.out.println("Unzipped file: " + unzippedLength + ". Zipped file: " + zippedLength);
+		System.out.println("% of unzipped file: " + format.format(100 * zippedLength / unzippedLength));
+	}
+
+	/**
+	 * Decompresses the file specified by zipFile to SAVE_DIR/fileName/saveName
+	 * 
+	 */
+	public static void decompressFile(String fileName, String zipFile, String saveName) {
+		// Save to SAVE_DIR + fileName + / + saveName
+		// e.g. unzip file1's segments to ./FROM_SERVER/file1/saveName
+		System.out.println("Decompressing: " + zipFile);
+		try (FileInputStream fis = new FileInputStream(zipFile); ZipInputStream zis = new ZipInputStream(fis);) {
+			ZipEntry entry = zis.getNextEntry();
+			byte[] buffer = new byte[1];
+			File file = new File(SAVE_DIR + fileName + "/" + saveName);
+			System.out.println("Unzipping to " + file.getPath());
+			FileOutputStream fos = new FileOutputStream(file);
+			int length;
+			while ((length = zis.read(buffer)) != -1) {
+				fos.write(buffer, 0, length);
+			}
+			fos.close();
+			zis.closeEntry();
+		} catch (IOException e) {
+			System.out.println(e);
+			e.printStackTrace();
+		}
+	}
+
+	/**
+	 * Rebuilds our file after obtaining segments from server/S3. The
+	 * segments are deleted after the reconstruction.
+	 */
+	private static void reconstructFile(String fileName, ArrayList<String> segments) {
+		try (PrintWriter pw = new PrintWriter(SAVE_DIR + fileName + "_deduped");) {
+			System.out.println("File deduped to: " + SAVE_DIR + fileName + "_deduped");
+			for (String segment : segments) {
+				File seg = new File(SAVE_DIR + fileName + "/" + segment);
+				FileInputStream fis = new FileInputStream(seg);
+				byte[] fileContent = new byte[(int) seg.length()];
+				fis.read(fileContent);
+				fis.close();
+				for (int i = 0; i < fileContent.length; i++) {
+					pw.append((char) fileContent[i]);
+				}
+				seg.delete(); // delete the unzipped segments
+			}
+			File saveDir = new File(SAVE_DIR + fileName);
+			if (saveDir.exists() && saveDir.isDirectory()) {
+				saveDir.delete();
+			}
+		} catch (IOException e) {
+			System.out.println(e);
+			e.printStackTrace();
 		}
 	}
 
@@ -134,17 +237,11 @@ public class DedupClient {
 			TimeUnit.MILLISECONDS.sleep(ms);
 		} catch (InterruptedException e) {
 			System.out.println(e);
+			e.printStackTrace();
 		}
 	}
-	
+
 	public static void main(String[] args) {
-		args = new String[4];
-		args[0] = "delete";
-//		args[1] =
-//		 "/Users/Johnny/Documents/workspace/coen241-dedup/data/file1";
-		args[1] = "file1";
-		args[2] = "0.0.0.0";
-		args[3] = "58762";
 		if (args.length != 4) {
 			System.err.println("Usage: java DedupClient [put | get] [file] [address] [port]");
 			System.exit(1);
@@ -154,38 +251,82 @@ public class DedupClient {
 		String myFile = args[1]; // file path or file name
 		String address = args[2]; // server's address
 		int port = Integer.parseInt(args[3]); // server's port
+		ContentBasedChunking cbc = new ContentBasedChunking();
 
 		if (command.equalsIgnoreCase("put")) {
-			// TODO: Step 1: Segment and finger print the files (output is
-			// metadata file)
-			File file = new File(myFile); // File we want to upload
-			File metadata = new File(myFile + ".data"); // Metadata of file to
-														// be sent to server
-			String fileDir = file.getParent(); // Directory containing our file,
-												// its metadata, and its
-												// segments
-			// Step 2: Compile set of fingerprints/segments
-			// Step 3: Determine segments of our file
-			HashSet<String> segments = prepareSegments(metadata);
-			// Step 4:Determine segments that need to be uploaded
-			HashSet<String> toUpload = getFilesToUpload(segments, address, port);
-			// Step 5: Send metadata file to the server
-			sendFile(metadata, address, port);
-			// Step 6: Initialize S3 client
-			MyS3Client client = new MyS3Client();
-			// Step 7: Send segments to buckets
-			for (String upload : toUpload) {
-				File seg = new File(fileDir + "/" + upload);
-				client.uploadFile(seg);
+			/*
+			 * Step 1: Segment and finger print the files (output is metadata
+			 * file)
+			 */
+
+			// File we want to upload
+			File file = new File(myFile);
+
+			// Directory containing our file, its metadata, and its segments
+			String fileDir = file.getParent();
+			System.out.println("fileDir: " + fileDir);
+
+			try {
+				cbc.digest(myFile);
+				// myFile = /path/to/myFile
+				// cbc.digest(myFile) creates /path/to/myFile.data
+				// and /path/to/segments
+			} catch (IOException e) {
+				e.printStackTrace();
+				System.out.println(e);
 			}
+			System.out.println("Digest finished: " + myFile);
+			// Metadata of file to be sent to server
+			File metadata = new File(myFile + ".data"); // /path/to/myFile.data
+
+			// Step 2: Determine segments of our file
+			HashSet<String> segments = prepareSegments(metadata);
+
+			// Step 3: Determine segments that need to be uploaded
+			HashSet<String> toUpload = getFilesToUpload(segments, address, port);
+
+			// Step 4: Send metadata file to the server
+			System.out.println("Sending meta data");
+			sendFile(metadata, address, port);
+
+			// Step 5: Initialize S3 client
+			MyS3Client client = new MyS3Client();
+
+			// Step 6: Send segments to buckets
+			for (String upload : toUpload) {
+				String segPath = fileDir + "/" + upload;
+				File segFile = new File(segPath);
+				// Compress the seg file to seg.zip
+				compressFile(segPath);
+				segFile.delete(); // Delete original file
+				File segZip = new File(segPath + ".zip");
+				client.uploadFile(segZip); // Upload zipped file
+				segZip.delete(); // Delete zipped file
+			}
+			metadata.delete(); // Delete file metadata
 		}
 		if (command.equalsIgnoreCase("get")) {
+			File saveDir = new File(SAVE_DIR);
+			if (!saveDir.exists()) {
+				saveDir.mkdir();
+			}
 			// Step 1: Get the segments needed to reconstruct our file
-			String[][] fileSegments = getFileSegments(myFile, address, port);
+			ArrayList<String> fileSegments = getFileSegments(myFile, address, port);
+			HashSet<String> uniqueFiles = new HashSet<>(fileSegments);
 			// Step 2: Initialize S3 client
 			MyS3Client client = new MyS3Client();
 			// Step 3: Download objects from S3
-			client.downloadFile("testingFile", fileSegments);
+			client.downloadZippedSegments(myFile, uniqueFiles); // saves to
+																// ./FROM_SERVER/filename/
+			// Now we have a directory of .zip files: unzip and reconstruct the
+			// file
+			for (String zippedSegment : uniqueFiles) {
+				String pathToZipSegment = SAVE_DIR + myFile + "/" + zippedSegment + ".zip";
+				decompressFile(myFile, pathToZipSegment, zippedSegment);
+				// Delete zip file
+				new File(pathToZipSegment).delete();
+			}
+			reconstructFile(myFile, fileSegments);
 		}
 		if (command.equalsIgnoreCase("delete")) {
 			deleteFile(myFile, address, port);
