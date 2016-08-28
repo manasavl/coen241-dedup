@@ -1,8 +1,13 @@
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 import org.rabinfingerprint.fingerprint.RabinFingerprintLong;
 import org.rabinfingerprint.fingerprint.RabinFingerprintLongWindowed;
@@ -17,17 +22,33 @@ public class ContentBasedChunking {
 	private RabinFingerprintLong fingerHash = new RabinFingerprintLong(p);
 	private RabinFingerprintLongWindowed fingerWindow = new RabinFingerprintLongWindowed(p, bytesPerWindow);
 	private ChunkBoundaryDetector boundaryDetector = BoundaryDetectors.DEFAULT_BOUNDARY_DETECTOR;
-	private final static int MIN_CHUNK_SIZE = 460;
-	private final static int MAX_CHUNK_SIZE = 2800;
+	private final static int MIN_CHUNK_SIZE = 4096/4;
+	private final static int MAX_CHUNK_SIZE = 8192;
 	private RabinFingerprintLong window = newWindowedFingerprint();
-	private List<Finger> breakpoints = new ArrayList<Finger>();
-	private Map<Finger, Long> fingerprints = new LinkedHashMap<Finger, Long>();
 	
-	public void digest (byte[] barray) {
+	public void storeSegmentInFile(String myFile, byte[] buf, int chunkLength, long fingerPrint) {
+		try {
+			File file = new File(myFile);
+			String fileDir = file.getParent();
+			Path p2 = Paths.get(fileDir + "/" + fingerPrint);
+			OutputStream out = new BufferedOutputStream(Files.newOutputStream(p2));
+			out.write(buf, 0, chunkLength);
+			out.close();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void digest (String myFile) throws IOException {
 		long chunkStart = 0;
 		long chunkEnd = 0;
 		int chunkLength = 0;
+		Path p1 = FileSystems.getDefault().getPath(myFile);
+		byte[] barray = null;
 		
+		barray = Files.readAllBytes(p1);
+		FileWriter fw = new FileWriter(myFile + ".data", true); //the true will append the new data
+			
 		ByteBuffer buf = ByteBuffer.allocateDirect(MAX_CHUNK_SIZE);
 		buf.clear();
 		/*
@@ -54,10 +75,12 @@ public class ContentBasedChunking {
 				buf.position(0);
 				buf.get(c);
 				
-				// store last chunk offset
-				Finger finger = new Finger(fingerHash.getFingerprintLong(), chunkLength, chunkStart);
-				breakpoints.add(finger);
-				addFingerprint(finger); 
+				/* Store fingerprint in metadata file */
+				String s = fingerHash.getFingerprintLong() + "," + chunkLength + "\n";
+				fw.write(s);
+				
+				storeSegmentInFile(myFile, c, chunkLength, fingerHash.getFingerprintLong());
+				
 				chunkStart = chunkEnd;
 				chunkLength = 0;
 				fingerHash.reset();
@@ -66,13 +89,15 @@ public class ContentBasedChunking {
 				byte[] c = new byte[chunkLength];
 				buf.position(0);
 				buf.get(c);
-				Finger finger = new Finger(fingerHash.getFingerprintLong(), chunkLength, chunkStart);
-				breakpoints.add(finger);
-				addFingerprint(finger);
+				
+				/* Store fingerprint in metadata file */
+				String s = fingerHash.getFingerprintLong() + "," + chunkLength + "\n";
+				fw.write(s);
+				
+				storeSegmentInFile(myFile, c, chunkLength, fingerHash.getFingerprintLong());
+				
 				fingerHash.reset();
 				buf.clear();
-				
-				// store last chunk offset
 				chunkStart = chunkEnd;
 				chunkLength = 0;
 			}
@@ -80,52 +105,18 @@ public class ContentBasedChunking {
 		byte[] c = new byte[chunkLength];
 		buf.position(0);
 		buf.get(c);
-		Finger finger = new Finger(fingerHash.getFingerprintLong(), chunkLength, chunkStart);
-		breakpoints.add(finger);
-		addFingerprint(finger);
+		
+		/* Store fingerprint in metadata file */
+		String s = fingerHash.getFingerprintLong() + "," + chunkLength + "\n";
+		fw.write(s);
+		
+		storeSegmentInFile(myFile, c, chunkLength, fingerHash.getFingerprintLong());
 		fingerHash.reset();
 		buf.clear();
-	}
-	
-	public double calculateDeduplicationRatio(){
-		long deduplicatedData = 0, allData = 0;
-		for (Finger fingerprint: fingerprints.keySet()){
-			long count = fingerprints.get(fingerprint);
-			if (count > 1){
-				deduplicatedData+=(count-1)*fingerprint.getLength();
-			}
-			allData+=count*fingerprint.getLength();
-		}
-		return ((double) deduplicatedData)/allData;
+		fw.close();
 	}
 
 	private RabinFingerprintLongWindowed newWindowedFingerprint() {
 		return new RabinFingerprintLongWindowed(fingerWindow);
-	}
-	
-	private boolean addFingerprint(Finger finger){
-		boolean alreadyExists = true;
-		if (!fingerprints.containsKey(finger)){
-			fingerprints.put(finger, 0L);
-			alreadyExists = false;
-			System.out.println("new one: " + finger.getHash() + ", length: " + finger.getLength() + ", start: " + finger.getPosition());
-		} else {
-			System.out.println("old one:" + finger.getHash() + ", length: " + finger.getLength() + ", start: " + finger.getPosition());
-		}
-		fingerprints.put(finger, fingerprints.get(finger)+1);
-		return alreadyExists;
-	}
-	
-	public Map<Finger, Long> getFingerprints() {
-		return fingerprints;
-	}
-	
-	public List<Finger> getBreakpoints() {
-		return breakpoints;
-	}
-
-	public void reset() {
-		breakpoints.clear();
-		fingerprints.clear();
 	}
 }

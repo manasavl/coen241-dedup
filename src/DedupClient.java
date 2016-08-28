@@ -33,7 +33,7 @@ public class DedupClient {
 	 * The metadata file contains information on the number of segments a file
 	 * is split into and the segments that make up the file.
 	 */
-	private static HashSet<String> prepareSegments(File metadata) {
+	public static HashSet<String> prepareSegments(File metadata) {
 		HashSet<String> segments = new HashSet<>();
 		try (BufferedReader br = new BufferedReader(new FileReader(metadata))) {
 			String line;
@@ -110,7 +110,7 @@ public class DedupClient {
 			out.println("get " + fileName); // Tell server which file we want
 			String input;
 			input = in.readLine();
-			if (input.equals("File does not exist!")) {
+			if (input.endsWith(" does not exist!")) {
 				System.err.println(fileName + " does not exist!");
 				System.exit(1);
 			} else {
