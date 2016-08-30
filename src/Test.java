@@ -4,11 +4,27 @@ import java.util.HashSet;
 
 public class Test {
 
-	
+	// This class is ran to generate results of deduplication
 	static final String dir = "/Users/Johnny/Downloads/test/";
 	
 	public static void main(String[] args) {
+		doChunking("testing");
 		doChunking("testing1");
+//		doChunking("file1.txt");
+//		doChunking("file2.txt");
+//		doChunking("file3.txt");
+//		doChunking("file4.txt");
+//		doChunking("fileA.txt");
+//		doChunking("fileB.txt");
+//		compressSegments("file1.txt");
+//		compressSegments("file2.txt");
+//		compressSegments("file3.txt");
+//		compressSegments("file4.txt");
+//		compressSegments("fileA.txt");
+//		compressSegments("fileB.txt");
+//		stats("file1.txt", "file2.txt");
+//		stats("file3.txt", "file4.txt");
+//		stats("fileA.txt", "fileB.txt");
 	}
 	
 	static void doChunking(String filename) {

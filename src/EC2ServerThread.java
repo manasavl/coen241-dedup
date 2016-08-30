@@ -109,6 +109,7 @@ public class EC2ServerThread extends Thread {
 			e.printStackTrace();
 		}
 		EC2Server.saveMap();
+		System.out.println("Operation done.");
 	}
 
 }
