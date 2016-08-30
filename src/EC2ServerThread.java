@@ -26,12 +26,13 @@ public class EC2ServerThread extends Thread {
 	 * The method that downloads the file the client is uploading.
 	 */
 	public static void receiveFile(String savePath, int fileLen, InputStream inputStream) {
-		try (OutputStream fos = new FileOutputStream(savePath);
+		try (PrintWriter pw = new PrintWriter(savePath);
+				InputStreamReader isr = new InputStreamReader(inputStream);
+				BufferedReader in = new BufferedReader(isr);
 				) {
-			byte[] bytes = new byte[1024];
-			int count;
-			while ((count = inputStream.read(bytes)) > 0) {
-				fos.write(bytes, 0, count);
+			String line;
+			while ((line = in.readLine()) != null) {
+				pw.println(line);
 			}
 		}
 		catch (IOException e) {

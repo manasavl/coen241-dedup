@@ -68,6 +68,9 @@ public class DedupClient {
 					toUpload.add(segment);
 				}
 			}
+			in.close();
+			out.close();
+			socket.close();
 		} catch (IOException e) {
 			System.out.println(e);
 			e.printStackTrace();
@@ -86,6 +89,7 @@ public class DedupClient {
 	public static void sendFile(File file, String address, int port) {
 		try (Socket socket = new Socket(address, port);
 				InputStream in = new FileInputStream(file);
+				BufferedReader br = new BufferedReader(new InputStreamReader(in));
 				OutputStream out = socket.getOutputStream();
 				PrintWriter pw = new PrintWriter(out, true);
 				) {
@@ -93,10 +97,9 @@ public class DedupClient {
 			String uploadCmd = "upload " + file.getName() + " " + length + "\n";
 			pw.println(uploadCmd);
 			pause(1);
-			byte[] bytes = new byte[1024];
-			int count;
-			while ((count = in.read(bytes)) > 0) {
-				out.write(bytes, 0, count);
+			String line;
+			while ((line = br.readLine()) != null) {
+				pw.println(line);
 				pause(1);
 			}
 		}
