@@ -9,26 +9,25 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.HashSet;
 
 public class EC2ServerThread extends Thread {
-	
+
 	private EC2Server server;
 	private Socket socket;
-		
+
 	public EC2ServerThread(EC2Server server, Socket socket) {
 		this.server = server;
 		this.socket = socket;
 	}
-	
+
 	/**
 	 * The method that downloads the file the client is uploading.
 	 */
 	public static void receiveFile(String savePath, int fileLen, InputStream inputStream) {
-		try (
-			ByteArrayOutputStream baos = new ByteArrayOutputStream(fileLen);
-			FileOutputStream fos = new FileOutputStream(savePath);
-			BufferedOutputStream bos = new BufferedOutputStream(fos)
-			) {
+		try (ByteArrayOutputStream baos = new ByteArrayOutputStream(fileLen);
+				FileOutputStream fos = new FileOutputStream(savePath);
+				BufferedOutputStream bos = new BufferedOutputStream(fos)) {
 			byte[] aByte = new byte[1];
 			int bytesRead = inputStream.read(aByte, 0, aByte.length);
 			do {
@@ -37,20 +36,15 @@ public class EC2ServerThread extends Thread {
 			} while (bytesRead != -1);
 			bos.write(baos.toByteArray());
 			bos.flush();
-		}
-		catch (IOException e) {
+		} catch (IOException e) {
 			System.out.println(e);
 		}
 	}
-	
+
 	public void run() {
 		// Runs when a connection is made
-		try (
-			PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-			BufferedReader in = new BufferedReader(
-					new InputStreamReader(
-						socket.getInputStream()));
-			) {
+		try (PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+				BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));) {
 			String input, output;
 			input = in.readLine();
 			// If client needs to determine which segments to upload
@@ -59,16 +53,15 @@ public class EC2ServerThread extends Thread {
 				while ((input = in.readLine()) != null) {
 					if (!server.hasSegment(input)) {
 						out.println("upload");
-						server.putSegment(input);
-					}
-					else out.println("skip");
+					} else
+						out.println("skip");
+					server.putSegment(input);
 				}
 			}
 			// If client is uploading a file
 			if (input.startsWith("upload")) {
 				String[] split = input.split(" ");
 				String fileName = split[1];
-				System.out.println("FILE NAME: " + fileName + ", length: " + split[2]);
 				receiveFile(EC2Server.saveDest + fileName, Integer.parseInt(split[2]), socket.getInputStream());
 				// ./SERVER/fileName
 			}
@@ -79,18 +72,14 @@ public class EC2ServerThread extends Thread {
 				File file = new File(EC2Server.saveDest + fileName + ".data");
 				if (!file.exists()) {
 					out.println("file: " + file.getName() + " does not exist!");
-				}
-				else {
+				} else {
 					out.println("File exists");
-					try (
-						BufferedReader br = new BufferedReader(new FileReader(file))
-						) {
+					try (BufferedReader br = new BufferedReader(new FileReader(file))) {
 						String line;
 						while ((line = br.readLine()) != null) {
 							out.println(line);
 						}
-					}
-					catch (IOException e) {
+					} catch (IOException e) {
 						System.out.println(e);
 						e.printStackTrace();
 					}
@@ -103,30 +92,19 @@ public class EC2ServerThread extends Thread {
 				File file = new File(EC2Server.saveDest + fileName + ".data");
 				if (!file.exists()) {
 					out.println("file does not exist!");
-				}
-				else {
+				} else {
+					out.println("deleting: " + fileName);
 					System.out.println("Starting to delete: " + fileName);
-					out.println("Deleting file");
-					try (
-						BufferedReader br = new BufferedReader(new FileReader(file));
-						) {
-						String line; 
-						while ((line = br.readLine()) != null) {
-							String segName = line.split(",")[0];
-							server.removeSegment(segName);
-						}
-						if (file.delete()) {
-							System.out.println("Deleted metadata file: " + file.getName());
-						}
+					HashSet<String> uniqueSegments = DedupClient.prepareSegments(file);
+					for (String seg : uniqueSegments) {
+						server.removeSegment(seg);
 					}
-					catch (IOException e) {
-						System.out.println(e);
-						e.printStackTrace();
+					if (file.delete()) {
+						System.out.println("Deleted metadata file: " + file.getName());
 					}
 				}
 			}
-		}
-		catch (IOException e) {
+		} catch (IOException e) {
 			System.out.println(e);
 			e.printStackTrace();
 		}

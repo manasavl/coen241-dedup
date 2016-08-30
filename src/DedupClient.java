@@ -141,7 +141,7 @@ public class DedupClient {
 				BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 			out.println("delete " + fileName);
 			String input = in.readLine();
-			if (input.equals("File does not exist!")) {
+			if (input.equals("file does not exist!")) {
 				System.out.println(fileName + " does not exist!");
 			}
 		} catch (IOException e) {
@@ -154,7 +154,7 @@ public class DedupClient {
 	 * Compresses the specified file into fileName.zip
 	 */
 	public static void compressFile(String fileName) {
-		System.out.println("Compressing " + fileName);
+//		System.out.println("Compressing " + fileName);
 		File unzippedFile = new File(fileName);
 		try (FileOutputStream fos = new FileOutputStream(fileName + ".zip");
 				ZipOutputStream zos = new ZipOutputStream(fos);
@@ -174,8 +174,8 @@ public class DedupClient {
 		long unzippedLength = unzippedFile.length();
 		long zippedLength = zippedFile.length();
 		DecimalFormat format = new DecimalFormat("#.00");
-		System.out.println("Unzipped file: " + unzippedLength + ". Zipped file: " + zippedLength);
-		System.out.println("% of unzipped file: " + format.format(100 * zippedLength / unzippedLength));
+//		System.out.println("Unzipped file: " + unzippedLength + ". Zipped file: " + zippedLength);
+//		System.out.println("% of unzipped file: " + format.format(100 * zippedLength / unzippedLength));
 	}
 
 	/**
@@ -220,11 +220,10 @@ public class DedupClient {
 				for (int i = 0; i < fileContent.length; i++) {
 					pw.append((char) fileContent[i]);
 				}
-				seg.delete(); // delete the unzipped segments
 			}
-			File saveDir = new File(SAVE_DIR + fileName);
-			if (saveDir.exists() && saveDir.isDirectory()) {
-				saveDir.delete();
+			for (String segment : segments) {
+				File seg = new File(SAVE_DIR + fileName + "/" + segment);
+				seg.delete(); // delete unzipped segments
 			}
 		} catch (IOException e) {
 			System.out.println(e);
@@ -284,9 +283,7 @@ public class DedupClient {
 
 			// Step 3: Determine segments that need to be uploaded
 			HashSet<String> toUpload = getFilesToUpload(segments, address, port);
-
 			// Step 4: Send metadata file to the server
-			System.out.println("Sending meta data");
 			sendFile(metadata, address, port);
 
 			// Step 5: Initialize S3 client
@@ -298,10 +295,17 @@ public class DedupClient {
 				File segFile = new File(segPath);
 				// Compress the seg file to seg.zip
 				compressFile(segPath);
-				segFile.delete(); // Delete original file
 				File segZip = new File(segPath + ".zip");
 				client.uploadFile(segZip); // Upload zipped file
-				segZip.delete(); // Delete zipped file
+			}
+			System.out.println("Number of segments actually uploaded: " + toUpload.size());
+			// Delete segment files
+			for (String seg : segments) {
+				String segPath = fileDir + "/" + seg;
+				File segFile = new File(segPath);
+				File segZip = new File(segPath + ".zip");
+				segFile.delete();
+				segZip.delete();
 			}
 			metadata.delete(); // Delete file metadata
 		}
@@ -327,6 +331,7 @@ public class DedupClient {
 				new File(pathToZipSegment).delete();
 			}
 			reconstructFile(myFile, fileSegments);
+			new File(SAVE_DIR + myFile).delete();
 		}
 		if (command.equalsIgnoreCase("delete")) {
 			deleteFile(myFile, address, port);

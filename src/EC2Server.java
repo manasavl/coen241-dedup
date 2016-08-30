@@ -83,7 +83,7 @@ public class EC2Server {
 	public synchronized void putSegment(String segment) {
 		if (segmentToCount.containsKey(segment)) {
 			int count = segmentToCount.get(segment);
-			segmentToCount.replace(segment, count + 1);
+			segmentToCount.put(segment, count + 1);
 		} else
 			segmentToCount.put(segment, 1);
 	}
@@ -95,7 +95,7 @@ public class EC2Server {
 				// delete this segment
 				deleteSegment(segment);
 			} else
-				segmentToCount.replace(segment, count - 1);
+				segmentToCount.put(segment, count - 1);
 		}
 	}
 

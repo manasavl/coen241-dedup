@@ -17,13 +17,13 @@ import org.rabinfingerprint.polynomial.Polynomial;
 
 public class ContentBasedChunking {
 
-	static long bytesPerWindow = 48;
+	static long bytesPerWindow = 24;
 	static Polynomial p = Polynomial.createFromLong(10923124345206883L);
 	private RabinFingerprintLong fingerHash = new RabinFingerprintLong(p);
 	private RabinFingerprintLongWindowed fingerWindow = new RabinFingerprintLongWindowed(p, bytesPerWindow);
 	private ChunkBoundaryDetector boundaryDetector = BoundaryDetectors.DEFAULT_BOUNDARY_DETECTOR;
-	private final static int MIN_CHUNK_SIZE = 4096/4;
-	private final static int MAX_CHUNK_SIZE = 8192;
+	private final static int MIN_CHUNK_SIZE = 4096 / 4; // 1 KB 
+	private final static int MAX_CHUNK_SIZE = 8192 * 4; // 32 KB
 	private RabinFingerprintLong window = newWindowedFingerprint();
 	
 	public void storeSegmentInFile(String myFile, byte[] buf, int chunkLength, long fingerPrint) {
