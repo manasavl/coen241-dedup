@@ -7,6 +7,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.HashSet;
@@ -25,18 +26,16 @@ public class EC2ServerThread extends Thread {
 	 * The method that downloads the file the client is uploading.
 	 */
 	public static void receiveFile(String savePath, int fileLen, InputStream inputStream) {
-		try (ByteArrayOutputStream baos = new ByteArrayOutputStream(fileLen);
-				FileOutputStream fos = new FileOutputStream(savePath);
-				BufferedOutputStream bos = new BufferedOutputStream(fos)) {
-			byte[] aByte = new byte[1];
-			int bytesRead = inputStream.read(aByte, 0, aByte.length);
-			do {
-				baos.write(aByte);
-				bytesRead = inputStream.read(aByte);
-			} while (bytesRead != -1);
-			bos.write(baos.toByteArray());
-			bos.flush();
-		} catch (IOException e) {
+		try (OutputStream fos = new FileOutputStream(savePath);
+				) {
+			byte[] bytes = new byte[1024];
+			int count;
+			while ((count = inputStream.read(bytes)) > 0) {
+				fos.write(bytes, 0, count);
+			}
+		}
+		catch (IOException e) {
+			e.printStackTrace();
 			System.out.println(e);
 		}
 	}

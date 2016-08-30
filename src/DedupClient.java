@@ -6,7 +6,9 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.text.DecimalFormat;
@@ -80,21 +82,25 @@ public class DedupClient {
 	 * @param file
 	 * @param address
 	 * @param port
-	 */
+	 */	
 	public static void sendFile(File file, String address, int port) {
 		try (Socket socket = new Socket(address, port);
-				PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-				FileInputStream fis = new FileInputStream(file);
-				BufferedInputStream bis = new BufferedInputStream(fis);
-				BufferedOutputStream toServer = new BufferedOutputStream(socket.getOutputStream());) {
-			// upload filename length
-			out.println("upload " + file.getName() + " " + file.length());
-			byte[] fileByteArray = new byte[(int) file.length()];
-			bis.read(fileByteArray, 0, fileByteArray.length);
-			toServer.write(fileByteArray, 0, fileByteArray.length);
-			pause(1); // Note: need to sleep for byte array to populate
-			toServer.flush();
-		} catch (IOException e) {
+				InputStream in = new FileInputStream(file);
+				OutputStream out = socket.getOutputStream();
+				PrintWriter pw = new PrintWriter(out, true);
+				) {
+			long length = file.length();
+			String uploadCmd = "upload " + file.getName() + " " + length + "\n";
+			pw.println(uploadCmd);
+			pause(1);
+			byte[] bytes = new byte[1024];
+			int count;
+			while ((count = in.read(bytes)) > 0) {
+				out.write(bytes, 0, count);
+				pause(1);
+			}
+		}
+		catch (IOException e) {
 			System.out.println(e);
 			e.printStackTrace();
 		}
@@ -154,7 +160,6 @@ public class DedupClient {
 	 * Compresses the specified file into fileName.zip
 	 */
 	public static void compressFile(String fileName) {
-//		System.out.println("Compressing " + fileName);
 		File unzippedFile = new File(fileName);
 		try (FileOutputStream fos = new FileOutputStream(fileName + ".zip");
 				ZipOutputStream zos = new ZipOutputStream(fos);
@@ -174,8 +179,6 @@ public class DedupClient {
 		long unzippedLength = unzippedFile.length();
 		long zippedLength = zippedFile.length();
 		DecimalFormat format = new DecimalFormat("#.00");
-//		System.out.println("Unzipped file: " + unzippedLength + ". Zipped file: " + zippedLength);
-//		System.out.println("% of unzipped file: " + format.format(100 * zippedLength / unzippedLength));
 	}
 
 	/**
@@ -185,7 +188,6 @@ public class DedupClient {
 	public static void decompressFile(String fileName, String zipFile, String saveName) {
 		// Save to SAVE_DIR + fileName + / + saveName
 		// e.g. unzip file1's segments to ./FROM_SERVER/file1/saveName
-		System.out.println("Decompressing: " + zipFile);
 		try (FileInputStream fis = new FileInputStream(zipFile); ZipInputStream zis = new ZipInputStream(fis);) {
 			ZipEntry entry = zis.getNextEntry();
 			byte[] buffer = new byte[1];
@@ -284,6 +286,7 @@ public class DedupClient {
 			// Step 3: Determine segments that need to be uploaded
 			HashSet<String> toUpload = getFilesToUpload(segments, address, port);
 			// Step 4: Send metadata file to the server
+			System.out.println("Sending metadata!");
 			sendFile(metadata, address, port);
 
 			// Step 5: Initialize S3 client
